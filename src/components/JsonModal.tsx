@@ -19,9 +19,8 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react';
-import { MetadataRecord, ActivityMetaData } from '../types';
+import { MetadataRecord, ActivityMetaData, EMPTY_METADATA } from '../types';
 import { DEFAULT_METADATA_ROW_ID } from '../services/supabaseClient';
-import { INITIAL_METADATA } from '../data/initialData';
 
 interface JsonModalProps {
   isOpen: boolean;
@@ -163,12 +162,12 @@ CREATE POLICY "Allow anon delete on metadata" ON metadata FOR DELETE TO anon USI
   const handleResetData = async () => {
     try {
       const res = await onResetData();
-      const resetObj = res || INITIAL_METADATA;
+      const resetObj = res || EMPTY_METADATA;
       const freshJson = JSON.stringify(resetObj, null, 2);
       setEditorText(freshJson);
       setFeedback({
         type: 'success',
-        message: 'Reset complete! Sample data restored and synced with DB.',
+        message: 'Reset complete! Data reset and synced with DB.',
       });
       if (onListCloudSnapshots && isSupabaseConfigured) {
         loadRecords();

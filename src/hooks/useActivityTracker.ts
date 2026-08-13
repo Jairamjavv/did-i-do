@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ActivityMetaData, ActivityCategory, ColumnType, TaskItem, CategoryInfo, MetadataRecord } from '../types';
-import { INITIAL_METADATA, CATEGORIES as DEFAULT_CATEGORIES } from '../data/initialData';
+import {
+  ActivityMetaData,
+  ActivityCategory,
+  ColumnType,
+  TaskItem,
+  CategoryInfo,
+  MetadataRecord,
+  DEFAULT_CATEGORIES,
+  EMPTY_METADATA,
+} from '../types';
 import confetti from 'canvas-confetti';
 import {
   fetchCloudMetadata,
@@ -20,7 +28,7 @@ export type SyncStatus = 'loading' | 'synced' | 'saving' | 'error' | 'disconnect
 
 export function useActivityTracker() {
   const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORIES);
-  const [data, setData] = useState<ActivityMetaData>(INITIAL_METADATA);
+  const [data, setData] = useState<ActivityMetaData>(EMPTY_METADATA);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(
     isSupabaseConfigured ? 'loading' : 'disconnected'
   );
@@ -354,7 +362,7 @@ export function useActivityTracker() {
     [categories, showToast]
   );
 
-  // Reset to default sample JSON with immediate Supabase DB sync & state reload
+  // Reset to default clean state with immediate Supabase DB sync & state reload
   const resetToDefault = useCallback(async (): Promise<ActivityMetaData> => {
     // Clear any pending debounce timer to prevent race conditions
     if (saveDebounceTimer.current) {
@@ -363,9 +371,9 @@ export function useActivityTracker() {
     }
 
     const freshData: ActivityMetaData = {
-      version: INITIAL_METADATA.version,
+      version: EMPTY_METADATA.version,
       lastUpdated: new Date().toISOString(),
-      items: JSON.parse(JSON.stringify(INITIAL_METADATA.items)),
+      items: [],
     };
     const freshCategories: CategoryInfo[] = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
 
@@ -377,13 +385,13 @@ export function useActivityTracker() {
       const success = await saveCloudMetadata(freshData, freshCategories, DEFAULT_METADATA_ROW_ID);
       if (success) {
         setSyncStatus('synced');
-        showToast('🔄 Reset complete: Default data restored and synced with Supabase DB!');
+        showToast('🔄 Reset complete: Data reset and synced with Supabase DB!');
       } else {
         setSyncStatus('error');
         showToast('⚠️ Reset applied locally, but failed to save to Supabase DB.');
       }
     } else {
-      showToast('🔄 Restored default metadata sample!');
+      showToast('🔄 Restored clean metadata state!');
     }
 
     return freshData;

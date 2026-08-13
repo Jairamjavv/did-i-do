@@ -255,6 +255,7 @@ export default function App() {
             <ActivityBoard
               category={selectedCategory}
               items={data.items}
+              categories={categories}
               onMoveColumn={moveItem}
               onUpdateProgress={handleUpdateProgress}
               onUpdateUnit={handleUpdateUnit}

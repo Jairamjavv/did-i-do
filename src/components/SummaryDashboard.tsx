@@ -1,6 +1,5 @@
 import React from 'react';
-import { ActivityCategory, CategoryInfo, TaskItem } from '../types';
-import { CATEGORIES as DEFAULT_CATEGORIES } from '../data/initialData';
+import { ActivityCategory, CategoryInfo, TaskItem, DEFAULT_CATEGORIES } from '../types';
 import { CheckCircle2, BookOpen, Film, Tv, Gamepad2, ArrowRight, Activity, Award, Star, Plus } from 'lucide-react';
 
 interface SummaryDashboardProps {

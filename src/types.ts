@@ -46,3 +46,40 @@ export interface MetadataRecord {
 }
 
 export type ThemeMode = 'dark' | 'light';
+
+export const DEFAULT_CATEGORIES: CategoryInfo[] = [
+  {
+    id: 'books',
+    name: 'Books',
+    verb: 'reading',
+    iconName: 'BookOpen',
+    unitDefault: 'pages',
+  },
+  {
+    id: 'movies',
+    name: 'Movies',
+    verb: 'watching',
+    iconName: 'Film',
+    unitDefault: 'mins',
+  },
+  {
+    id: 'series',
+    name: 'Series',
+    verb: 'seeing',
+    iconName: 'Tv',
+    unitDefault: 'episodes',
+  },
+  {
+    id: 'games',
+    name: 'Games',
+    verb: 'playing',
+    iconName: 'Gamepad2',
+    unitDefault: 'hours',
+  },
+];
+
+export const EMPTY_METADATA: ActivityMetaData = {
+  version: '1.0.0',
+  lastUpdated: new Date().toISOString(),
+  items: [],
+};

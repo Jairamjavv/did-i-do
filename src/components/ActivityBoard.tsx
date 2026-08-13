@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityCategory, ColumnType, TaskItem } from '../types';
-import { CATEGORIES } from '../data/initialData';
+import { ActivityCategory, CategoryInfo, ColumnType, TaskItem, DEFAULT_CATEGORIES } from '../types';
 import { TaskCard } from './TaskCard';
 import { Plus, Sliders, AlertTriangle, CheckCircle2, ArrowUpDown, Filter, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -15,6 +14,7 @@ interface ActivityBoardProps {
   onEditItem: (item: TaskItem) => void;
   onDeleteItem: (id: string) => void;
   searchQuery: string;
+  categories?: CategoryInfo[];
 }
 
 export const ActivityBoard: React.FC<ActivityBoardProps> = ({
@@ -28,13 +28,14 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
   onEditItem,
   onDeleteItem,
   searchQuery,
+  categories = DEFAULT_CATEGORIES,
 }) => {
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<ColumnType | null>(null);
   const [sortBy, setSortBy] = useState<'default' | 'progress' | 'priority' | 'title'>('default');
   const [isShrunkAll, setIsShrunkAll] = useState(false);
 
-  const categoryMeta = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
+  const categoryMeta = categories.find((c) => c.id === category) || categories[0] || DEFAULT_CATEGORIES[0];
 
   // Filter items for this category and search query
   const categoryItems = items.filter((item) => {

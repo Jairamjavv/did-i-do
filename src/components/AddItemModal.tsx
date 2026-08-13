@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityCategory, CategoryInfo, ColumnType, TaskItem } from '../types';
-import { CATEGORIES as DEFAULT_CATEGORIES } from '../data/initialData';
+import { ActivityCategory, CategoryInfo, ColumnType, TaskItem, DEFAULT_CATEGORIES } from '../types';
 import { X, Plus, Save, AlertCircle } from 'lucide-react';
 
 interface AddItemModalProps {
