@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ActivityCategory, CategoryInfo, ColumnType, TaskItem, DEFAULT_CATEGORIES } from '../types';
-import { X, Plus, Save, AlertCircle } from 'lucide-react';
+import { X, Plus, Save, AlertCircle, Sparkles, Search, Loader2, Check, BookOpen, Film, Tv, Gamepad2 } from 'lucide-react';
+import { searchMetadata, MetadataSuggestion } from '../services/metadataApi';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -35,6 +36,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [notes, setNotes] = useState('');
 
+  // Auto-fill API states
+  const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [autofillSuccess, setAutofillSuccess] = useState<string | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionsBoxRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (editingItem) {
       setCategory(editingItem.category);
@@ -62,15 +71,69 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       setRating(undefined);
       setNotes('');
     }
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setAutofillSuccess(null);
   }, [editingItem, initialCategory, initialColumn, isOpen, categories]);
 
-  // When category changes, update unitName default
+  // When category changes, update unitName default and clear suggestions
   const handleCategoryChange = (cat: ActivityCategory) => {
     setCategory(cat);
     const catObj = categories.find((c) => c.id === cat);
     if (catObj) {
       setUnitName(catObj.unitDefault);
     }
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  // Trigger search on title change
+  const handleTitleChange = (val: string) => {
+    setTitle(val);
+    setAutofillSuccess(null);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (val.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      const results = await searchMetadata(val, category);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setIsSearching(false);
+    }, 450);
+  };
+
+  // Apply suggestion to form
+  const handleSelectSuggestion = (sug: MetadataSuggestion) => {
+    setTitle(sug.title);
+    if (sug.creatorOrMeta) {
+      setCreatorOrMeta(sug.creatorOrMeta);
+    }
+    if (sug.totalUnits) {
+      setTotalUnits(sug.totalUnits);
+    }
+    if (sug.unitName) {
+      setUnitName(sug.unitName);
+    }
+    if (sug.rating !== undefined) {
+      setRating(sug.rating);
+    }
+    if (sug.notes) {
+      setNotes(sug.notes);
+    }
+
+    setShowSuggestions(false);
+    setAutofillSuccess(`✨ Auto-filled from ${sug.source}!`);
+    setTimeout(() => setAutofillSuccess(null), 3500);
   };
 
   if (!isOpen) return null;
@@ -144,20 +207,112 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* TITLE & CREATOR */}
+          {/* TITLE WITH AUTOFILL SEARCH & CREATOR */}
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
-                Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Dune Messiah, Oppenheimer, Elden Ring..."
-                className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
-              />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-mono-clean font-bold uppercase">
+                  Title *
+                </label>
+                <div className="flex items-center gap-1.5 text-[10px] font-mono-clean text-zinc-500">
+                  {isSearching ? (
+                    <span className="flex items-center gap-1 text-yellow-600 font-bold">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Searching {category}...</span>
+                    </span>
+                  ) : autofillSuccess ? (
+                    <span className="flex items-center gap-1 text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
+                      <Check className="w-3 h-3" />
+                      <span>{autofillSuccess}</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-zinc-400">
+                      <Sparkles className="w-3 h-3 text-yellow-500" />
+                      <span>Live API Auto-Fill</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder={`Search or enter ${category.slice(0, -1) || 'item'} title...`}
+                  className="w-full pl-3 pr-9 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
+                  {isSearching ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                </div>
+              </div>
+
+              {/* LIVE SUGGESTIONS DROPDOWN */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div
+                  ref={suggestionsBoxRef}
+                  className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white dark:bg-zinc-900 border-2 border-black dark:border-white rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-56 overflow-y-auto"
+                >
+                  <div className="p-1.5 bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-[10px] font-mono-clean font-bold text-zinc-600 dark:text-zinc-300">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-yellow-500" />
+                      <span>Click to Auto-Fill Metadata:</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSuggestions(false)}
+                      className="hover:text-black dark:hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {suggestions.map((sug) => (
+                    <button
+                      type="button"
+                      key={sug.id}
+                      onClick={() => handleSelectSuggestion(sug)}
+                      className="w-full text-left p-2.5 hover:bg-yellow-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0 transition-colors flex items-start justify-between gap-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-titan text-xs text-black dark:text-white truncate">
+                          {sug.title}
+                          {sug.year && (
+                            <span className="ml-1 text-[10px] font-mono-clean text-zinc-500 font-normal">
+                              ({sug.year})
+                            </span>
+                          )}
+                        </div>
+                        {sug.creatorOrMeta && (
+                          <p className="text-[11px] font-mono-clean text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
+                            {sug.creatorOrMeta}
+                          </p>
+                        )}
+                        {sug.notes && (
+                          <p className="text-[10px] font-mono-clean text-zinc-400 line-clamp-1 mt-0.5">
+                            {sug.notes}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="text-[9px] font-mono-clean px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-700 text-black dark:text-white rounded font-bold">
+                          {sug.source}
+                        </span>
+                        {sug.totalUnits && (
+                          <span className="text-[9px] font-mono-clean text-zinc-500">
+                            {sug.totalUnits} {sug.unitName || 'units'}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
