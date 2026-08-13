@@ -34,4 +34,15 @@ export interface CategoryInfo {
   unitDefault: string;
 }
 
+export interface CloudPayload {
+  data: ActivityMetaData;
+  categories: CategoryInfo[];
+}
+
+export interface MetadataRecord {
+  id: string;
+  data: CloudPayload;
+  updated_at: string;
+}
+
 export type ThemeMode = 'dark' | 'light';

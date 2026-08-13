@@ -26,6 +26,12 @@ export default function App() {
     importJSON,
     exportJSON,
     resetToDefault,
+    createCloudSnapshot,
+    fetchFromCloud,
+    listCloudSnapshots,
+    saveToCloud,
+    deleteFromCloud,
+    isSupabaseConfigured,
   } = useActivityTracker();
 
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'dashboard'>('books');
@@ -287,6 +293,12 @@ export default function App() {
         jsonString={exportJSON()}
         onImportJSON={importJSON}
         onResetData={resetToDefault}
+        isSupabaseConfigured={isSupabaseConfigured}
+        onCreateCloudSnapshot={createCloudSnapshot}
+        onFetchFromCloud={fetchFromCloud}
+        onSaveToCloud={saveToCloud}
+        onDeleteFromCloud={deleteFromCloud}
+        onListCloudSnapshots={listCloudSnapshots}
       />
 
     </div>

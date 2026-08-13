@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ActivityMetaData, ActivityCategory, ColumnType, TaskItem, CategoryInfo } from '../types';
+import { ActivityMetaData, ActivityCategory, ColumnType, TaskItem, CategoryInfo, MetadataRecord } from '../types';
 import { INITIAL_METADATA, CATEGORIES as DEFAULT_CATEGORIES } from '../data/initialData';
 import confetti from 'canvas-confetti';
 import {
   fetchCloudMetadata,
   saveCloudMetadata,
+  createMetadataRecord,
+  getMetadataRecordById,
+  fetchAllMetadataRecords,
+  updateMetadataRecord,
+  deleteMetadataRecord,
+  deleteCloudMetadata,
+  deleteAllMetadataRecords,
   isSupabaseConfigured,
+  DEFAULT_METADATA_ROW_ID,
 } from '../services/supabaseClient';
 
 export type SyncStatus = 'loading' | 'synced' | 'saving' | 'error' | 'disconnected';
@@ -318,6 +326,143 @@ export function useActivityTracker() {
     showToast('🔄 Restored default metadata sample!');
   }, [showToast]);
 
+  // ============================================================
+  // Supabase Metadata Table CRUD Operations
+  // ============================================================
+
+  // 1. CREATE: Insert a new metadata snapshot / record
+  const createCloudSnapshot = useCallback(
+    async (customId?: string): Promise<{ success: boolean; data?: MetadataRecord; error?: string }> => {
+      if (!isSupabaseConfigured) {
+        showToast('⚠️ Supabase is not configured. Please set your .env credentials.');
+        return { success: false, error: 'Supabase is not configured.' };
+      }
+      const recordId = customId?.trim() || `snapshot_${Date.now()}`;
+      setSyncStatus('saving');
+      const res = await createMetadataRecord(recordId, data, categories);
+      if (res.success) {
+        setSyncStatus('synced');
+        showToast(`☁️ Created new metadata record "${recordId}" in Supabase!`);
+      } else {
+        setSyncStatus('error');
+        showToast(`⚠️ Failed to create metadata: ${res.error}`);
+      }
+      return res;
+    },
+    [data, categories, showToast]
+  );
+
+  // 2. READ: Pull metadata from cloud by ID
+  const fetchFromCloud = useCallback(
+    async (rowId: string = DEFAULT_METADATA_ROW_ID): Promise<boolean> => {
+      if (!isSupabaseConfigured) {
+        showToast('⚠️ Supabase is not configured.');
+        return false;
+      }
+      setSyncStatus('loading');
+      const cloudPayload = await fetchCloudMetadata(rowId);
+      if (cloudPayload) {
+        if (cloudPayload.data && Array.isArray(cloudPayload.data.items)) {
+          setData(cloudPayload.data);
+        }
+        if (cloudPayload.categories && Array.isArray(cloudPayload.categories)) {
+          setCategories(cloudPayload.categories);
+        }
+        setSyncStatus('synced');
+        showToast(`☁️ Successfully pulled metadata ("${rowId}") from Supabase!`);
+        return true;
+      } else {
+        setSyncStatus('synced');
+        showToast(`⚠️ No metadata found for row ID "${rowId}".`);
+        return false;
+      }
+    },
+    [showToast]
+  );
+
+  // 3. READ (LIST): List all metadata records from table
+  const listCloudSnapshots = useCallback(async (): Promise<MetadataRecord[]> => {
+    if (!isSupabaseConfigured) return [];
+    return await fetchAllMetadataRecords();
+  }, []);
+
+  // 4. UPDATE: Explicitly update an existing metadata record
+  const updateCloudRecord = useCallback(
+    async (rowId: string = DEFAULT_METADATA_ROW_ID): Promise<{ success: boolean; error?: string }> => {
+      if (!isSupabaseConfigured) {
+        showToast('⚠️ Supabase is not configured.');
+        return { success: false, error: 'Supabase is not configured.' };
+      }
+      setSyncStatus('saving');
+      const res = await updateMetadataRecord(rowId, data, categories);
+      if (res.success) {
+        setSyncStatus('synced');
+        showToast(`☁️ Updated metadata record "${rowId}" in Supabase!`);
+      } else {
+        setSyncStatus('error');
+        showToast(`⚠️ Failed to update metadata: ${res.error}`);
+      }
+      return res;
+    },
+    [data, categories, showToast]
+  );
+
+  // 5. UPSERT: Save current state to cloud
+  const saveToCloud = useCallback(
+    async (rowId: string = DEFAULT_METADATA_ROW_ID): Promise<boolean> => {
+      if (!isSupabaseConfigured) {
+        showToast('⚠️ Supabase is not configured.');
+        return false;
+      }
+      setSyncStatus('saving');
+      const success = await saveCloudMetadata(data, categories, rowId);
+      if (success) {
+        setSyncStatus('synced');
+        showToast(`☁️ Saved & upserted metadata ("${rowId}") to Supabase!`);
+      } else {
+        setSyncStatus('error');
+        showToast('⚠️ Failed to save metadata to Supabase DB.');
+      }
+      return success;
+    },
+    [data, categories, showToast]
+  );
+
+  // 6. DELETE: Delete a metadata record by ID
+  const deleteFromCloud = useCallback(
+    async (rowId: string = DEFAULT_METADATA_ROW_ID): Promise<boolean> => {
+      if (!isSupabaseConfigured) {
+        showToast('⚠️ Supabase is not configured.');
+        return false;
+      }
+      const res = await deleteMetadataRecord(rowId);
+      if (res.success) {
+        showToast(`🗑️ Deleted metadata record "${rowId}" from Supabase!`);
+        return true;
+      } else {
+        showToast(`⚠️ Failed to delete metadata: ${res.error}`);
+        return false;
+      }
+    },
+    [showToast]
+  );
+
+  // 7. DELETE ALL: Clear all records in metadata table
+  const clearAllCloudSnapshots = useCallback(async (): Promise<boolean> => {
+    if (!isSupabaseConfigured) {
+      showToast('⚠️ Supabase is not configured.');
+      return false;
+    }
+    const res = await deleteAllMetadataRecords();
+    if (res.success) {
+      showToast('🗑️ Cleared all records from Supabase metadata table!');
+      return true;
+    } else {
+      showToast(`⚠️ Failed to clear metadata: ${res.error}`);
+      return false;
+    }
+  }, [showToast]);
+
   return {
     data,
     categories,
@@ -333,5 +478,14 @@ export function useActivityTracker() {
     importJSON,
     exportJSON,
     resetToDefault,
+    // Metadata CRUD Operations
+    createCloudSnapshot,
+    fetchFromCloud,
+    listCloudSnapshots,
+    updateCloudRecord,
+    saveToCloud,
+    deleteFromCloud,
+    clearAllCloudSnapshots,
+    isSupabaseConfigured,
   };
 }
