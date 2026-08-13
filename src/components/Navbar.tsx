@@ -34,20 +34,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="w-full border-b-2 border-black bg-white text-black sticky top-0 z-40 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-        
+
         {/* HAMBURGER MENU BUTTON & BRANDING */}
         <div className="flex items-center gap-3">
           {/* HAMBURGER BUTTON WITH 5S COUNTDOWN INDICATOR */}
           <button
             onClick={onToggleSideMenu}
             disabled={isLiveStatusOpen}
-            className={`p-2 border-2 border-black flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
-              isLiveStatusOpen
+            className={`p-2 border-2 border-black flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isLiveStatusOpen
                 ? 'opacity-40 cursor-not-allowed bg-zinc-100 text-zinc-400 border-zinc-300 pointer-events-none'
                 : isSideMenuOpen
-                ? 'bg-black text-white font-black'
-                : 'bg-white text-black hover:bg-gray-100'
-            }`}
+                  ? 'bg-black text-white font-black'
+                  : 'bg-white text-black hover:bg-gray-100'
+              }`}
             title={
               isLiveStatusOpen
                 ? 'Menu disabled while Live Status is open'
@@ -67,9 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* APP LOGO & BRANDING */}
           <div className="flex items-center gap-2 group cursor-pointer select-none">
-            <div className="w-8 h-8 bg-black text-white group-hover:bg-orange-500 group-hover:text-black flex items-center justify-center font-black text-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors duration-200">
-              :
-            </div>
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 leading-none">
               <h1 className="font-impact text-xl sm:text-2xl md:text-3xl tracking-tighter uppercase font-black text-black group-hover:text-orange-500 transition-colors duration-200">
                 D.I.D
@@ -103,18 +99,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* ACTION CONTROLS & LIVE BUTTON */}
         <div className="flex items-center gap-2 sm:gap-3">
-          
+
           {/* SUPABASE CLOUD SYNC STATUS BADGE */}
           <div
-            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 border-2 border-black font-mono text-[10px] font-bold uppercase ${
-              syncStatus === 'synced'
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 border-2 border-black font-mono text-[10px] font-bold uppercase ${syncStatus === 'synced'
                 ? 'bg-green-100 text-green-800'
                 : syncStatus === 'saving' || syncStatus === 'loading'
-                ? 'bg-yellow-100 text-yellow-800'
-                : syncStatus === 'error'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-zinc-100 text-zinc-600'
-            }`}
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : syncStatus === 'error'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-zinc-100 text-zinc-600'
+              }`}
             title={`Supabase Cloud Sync Status: ${syncStatus}`}
           >
             {syncStatus === 'synced' ? (
@@ -139,13 +134,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onToggleLiveStatus}
             disabled={isSideMenuOpen}
-            className={`px-3 py-1.5 border-2 border-black font-mono text-xs font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
-              isSideMenuOpen
+            className={`px-3 py-1.5 border-2 border-black font-mono text-xs font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isSideMenuOpen
                 ? 'opacity-40 cursor-not-allowed bg-zinc-100 text-zinc-400 border-zinc-300 pointer-events-none'
                 : isLiveStatusOpen
-                ? 'bg-yellow-400 text-black border-black font-black'
-                : 'bg-black text-white hover:opacity-90'
-            }`}
+                  ? 'bg-yellow-400 text-black border-black font-black'
+                  : 'bg-black text-white hover:opacity-90'
+              }`}
             title={
               isSideMenuOpen
                 ? 'Live Status disabled while Menu is open'
