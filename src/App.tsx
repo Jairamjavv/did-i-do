@@ -34,7 +34,7 @@ export default function App() {
     isSupabaseConfigured,
   } = useActivityTracker();
 
-  const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'dashboard'>('books');
+  const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'dashboard'>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals state
@@ -170,6 +170,7 @@ export default function App() {
         isLiveStatusOpen={isLiveStatusOpen}
         liveStatusCountdown={liveStatusCountdown}
         syncStatus={syncStatus}
+        onLogoClick={() => setSelectedCategory('dashboard')}
       />
 
       {/* TOAST NOTIFICATION POPUP */}

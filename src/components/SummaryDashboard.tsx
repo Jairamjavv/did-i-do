@@ -37,7 +37,7 @@ export const SummaryDashboard: React.FC<SummaryDashboardProps> = ({
 
   return (
     <div className="space-y-8">
-      
+
       {/* SUMMARY BANNER */}
       <div className="p-6 sm:p-8 rounded-2xl border-2 border-black dark:border-white bg-black text-white dark:bg-white dark:text-black shadow-[6px_6px_0px_0px_rgba(100,100,100,0.5)] relative overflow-hidden">
         <div className="relative z-10 max-w-2xl">
@@ -76,7 +76,7 @@ export const SummaryDashboard: React.FC<SummaryDashboardProps> = ({
             Activity Categories Breakdown
           </h3>
           <span className="text-xs font-mono-clean text-zinc-500">
-            4 Core Media Hubs
+            Leisure Categories
           </span>
         </div>
 
@@ -102,11 +102,10 @@ export const SummaryDashboard: React.FC<SummaryDashboardProps> = ({
                       {CATEGORY_ICONS[cat.iconName]}
                     </div>
                     <span
-                      className={`text-[10px] font-mono-clean font-bold px-2.5 py-1 rounded-full border ${
-                        isConstraintMet
+                      className={`text-[10px] font-mono-clean font-bold px-2.5 py-1 rounded-full border ${isConstraintMet
                           ? 'border-black dark:border-white bg-zinc-100 dark:bg-zinc-800'
                           : 'border-yellow-500 bg-yellow-400 text-black font-bold'
-                      }`}
+                        }`}
                     >
                       {inProg}/3-5 Active
                     </span>

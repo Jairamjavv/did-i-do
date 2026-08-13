@@ -14,6 +14,7 @@ interface NavbarProps {
   isLiveStatusOpen: boolean;
   liveStatusCountdown: number | null;
   syncStatus?: SyncStatus;
+  onLogoClick?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -28,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isLiveStatusOpen,
   liveStatusCountdown,
   syncStatus = 'disconnected',
+  onLogoClick,
 }) => {
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
@@ -65,7 +67,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* APP LOGO & BRANDING */}
-          <div className="flex items-center gap-2 group cursor-pointer select-none">
+          <div
+            onClick={onLogoClick}
+            className="flex items-center gap-2 group cursor-pointer select-none"
+            title="Go to Dashboard"
+          >
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 leading-none">
               <h1 className="font-impact text-xl sm:text-2xl md:text-3xl tracking-tighter uppercase font-black text-black group-hover:text-orange-500 transition-colors duration-200">
                 D.I.D
