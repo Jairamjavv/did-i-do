@@ -19,15 +19,16 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react';
-import { MetadataRecord } from '../types';
+import { MetadataRecord, ActivityMetaData } from '../types';
 import { DEFAULT_METADATA_ROW_ID } from '../services/supabaseClient';
+import { INITIAL_METADATA } from '../data/initialData';
 
 interface JsonModalProps {
   isOpen: boolean;
   onClose: () => void;
   jsonString: string;
-  onImportJSON: (jsonString: string) => { success: boolean; message: string };
-  onResetData: () => void;
+  onImportJSON: (jsonString: string) => { success: boolean; message: string; data?: ActivityMetaData };
+  onResetData: () => Promise<ActivityMetaData | void> | void;
   isSupabaseConfigured?: boolean;
   onCreateCloudSnapshot?: (customId?: string) => Promise<{ success: boolean; data?: MetadataRecord; error?: string }>;
   onFetchFromCloud?: (rowId?: string) => Promise<boolean>;
@@ -158,6 +159,25 @@ CREATE POLICY "Allow anon delete on metadata" ON metadata FOR DELETE TO anon USI
     }
   };
 
+  // Reset Handler that updates editorText and syncs with DB
+  const handleResetData = async () => {
+    try {
+      const res = await onResetData();
+      const resetObj = res || INITIAL_METADATA;
+      const freshJson = JSON.stringify(resetObj, null, 2);
+      setEditorText(freshJson);
+      setFeedback({
+        type: 'success',
+        message: 'Reset complete! Sample data restored and synced with DB.',
+      });
+      if (onListCloudSnapshots && isSupabaseConfigured) {
+        loadRecords();
+      }
+    } catch (e: any) {
+      setFeedback({ type: 'error', message: `Reset failed: ${e.message}` });
+    }
+  };
+
   // Cloud CRUD Handlers
   const handleCreateSnapshot = async () => {
     if (!onCreateCloudSnapshot) return;
@@ -180,7 +200,10 @@ CREATE POLICY "Allow anon delete on metadata" ON metadata FOR DELETE TO anon USI
     const success = await onFetchFromCloud(rowId);
     setCloudActionLoading(null);
     if (success) {
-      setFeedback({ type: 'success', message: `Pulled "${rowId}" from Supabase!` });
+      setFeedback({ type: 'success', message: `Pulled "${rowId}" from Supabase & loaded into UI!` });
+      if (onListCloudSnapshots && isSupabaseConfigured) {
+        loadRecords();
+      }
     } else {
       setFeedback({ type: 'error', message: `Failed to fetch "${rowId}". Record may not exist.` });
     }
@@ -341,7 +364,7 @@ CREATE POLICY "Allow anon delete on metadata" ON metadata FOR DELETE TO anon USI
               </div>
 
               <button
-                onClick={onResetData}
+                onClick={handleResetData}
                 className="px-3 py-1.5 border border-zinc-400 font-mono text-xs font-bold text-zinc-600 hover:text-red-600 hover:border-red-600 flex items-center gap-1 uppercase"
               >
                 <RefreshCw className="w-3.5 h-3.5" />

@@ -263,32 +263,67 @@ export function useActivityTracker() {
     }));
   }, []);
 
-  // Import JSON metadata with validation
-  const importJSON = useCallback((jsonString: string): { success: boolean; message: string } => {
-    try {
-      const parsed = JSON.parse(jsonString);
-      if (!parsed || !Array.isArray(parsed.items)) {
-        return { success: false, message: 'Invalid JSON schema: Missing "items" array.' };
-      }
-
-      // Check required fields for each item
-      for (const item of parsed.items) {
-        if (!item.id || !item.category || !item.title || !item.column) {
-          return { success: false, message: 'Invalid item data in JSON. Items must have id, category, title, and column.' };
+  // Import JSON metadata with validation and immediate DB sync
+  const importJSON = useCallback(
+    (jsonString: string): { success: boolean; message: string; data?: ActivityMetaData } => {
+      try {
+        const parsed = JSON.parse(jsonString);
+        if (!parsed || !Array.isArray(parsed.items)) {
+          return { success: false, message: 'Invalid JSON schema: Missing "items" array.' };
         }
+
+        // Check required fields for each item
+        for (const item of parsed.items) {
+          if (!item.id || !item.category || !item.title || !item.column) {
+            return {
+              success: false,
+              message: 'Invalid item data in JSON. Items must have id, category, title, and column.',
+            };
+          }
+        }
+
+        const newData: ActivityMetaData = {
+          version: parsed.version || '1.0.0',
+          lastUpdated: new Date().toISOString(),
+          items: parsed.items,
+        };
+
+        const targetCategories = Array.isArray(parsed.categories) ? parsed.categories : categories;
+
+        setData(newData);
+        if (Array.isArray(parsed.categories)) {
+          setCategories(parsed.categories);
+        }
+
+        // Cancel pending debounce and immediately sync to DB
+        if (saveDebounceTimer.current) {
+          clearTimeout(saveDebounceTimer.current);
+          saveDebounceTimer.current = null;
+        }
+
+        if (isSupabaseConfigured) {
+          setSyncStatus('saving');
+          saveCloudMetadata(newData, targetCategories, DEFAULT_METADATA_ROW_ID).then((success) => {
+            if (success) {
+              setSyncStatus('synced');
+            } else {
+              setSyncStatus('error');
+              showToast('⚠️ Imported locally, but failed to save to Supabase DB.');
+            }
+          });
+        }
+
+        return {
+          success: true,
+          message: `Successfully imported ${parsed.items.length} items & synced to DB!`,
+          data: newData,
+        };
+      } catch (e: any) {
+        return { success: false, message: `JSON Syntax Error: ${e.message}` };
       }
-
-      setData({
-        version: parsed.version || '1.0.0',
-        lastUpdated: new Date().toISOString(),
-        items: parsed.items,
-      });
-
-      return { success: true, message: `Successfully imported ${parsed.items.length} items from JSON!` };
-    } catch (e: any) {
-      return { success: false, message: `JSON Syntax Error: ${e.message}` };
-    }
-  }, []);
+    },
+    [categories, showToast]
+  );
 
   // Export JSON
   const exportJSON = useCallback(() => {
@@ -319,11 +354,39 @@ export function useActivityTracker() {
     [categories, showToast]
   );
 
-  // Reset to default sample JSON
-  const resetToDefault = useCallback(() => {
-    setData(INITIAL_METADATA);
-    setCategories(DEFAULT_CATEGORIES);
-    showToast('🔄 Restored default metadata sample!');
+  // Reset to default sample JSON with immediate Supabase DB sync & state reload
+  const resetToDefault = useCallback(async (): Promise<ActivityMetaData> => {
+    // Clear any pending debounce timer to prevent race conditions
+    if (saveDebounceTimer.current) {
+      clearTimeout(saveDebounceTimer.current);
+      saveDebounceTimer.current = null;
+    }
+
+    const freshData: ActivityMetaData = {
+      version: INITIAL_METADATA.version,
+      lastUpdated: new Date().toISOString(),
+      items: JSON.parse(JSON.stringify(INITIAL_METADATA.items)),
+    };
+    const freshCategories: CategoryInfo[] = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+
+    setData(freshData);
+    setCategories(freshCategories);
+
+    if (isSupabaseConfigured) {
+      setSyncStatus('saving');
+      const success = await saveCloudMetadata(freshData, freshCategories, DEFAULT_METADATA_ROW_ID);
+      if (success) {
+        setSyncStatus('synced');
+        showToast('🔄 Reset complete: Default data restored and synced with Supabase DB!');
+      } else {
+        setSyncStatus('error');
+        showToast('⚠️ Reset applied locally, but failed to save to Supabase DB.');
+      }
+    } else {
+      showToast('🔄 Restored default metadata sample!');
+    }
+
+    return freshData;
   }, [showToast]);
 
   // ============================================================
