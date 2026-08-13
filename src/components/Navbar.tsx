@@ -66,13 +66,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* APP LOGO & BRANDING */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-black text-white flex items-center justify-center font-black text-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex items-center gap-2 group cursor-pointer select-none">
+            <div className="w-8 h-8 bg-black text-white group-hover:bg-orange-500 group-hover:text-black flex items-center justify-center font-black text-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors duration-200">
               :
             </div>
-            <h1 className="font-impact text-xl sm:text-2xl md:text-3xl tracking-tighter uppercase font-black">
-              D.I.D <span className="font-mono text-xs font-bold tracking-widest text-zinc-500 hidden lg:inline-block">- Did I Do</span>
-            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5 leading-none">
+              <h1 className="font-impact text-xl sm:text-2xl md:text-3xl tracking-tighter uppercase font-black text-black group-hover:text-orange-500 transition-colors duration-200">
+                D.I.D
+              </h1>
+              <span className="font-mono text-[10px] sm:text-xs font-bold tracking-wider text-zinc-500 group-hover:text-orange-500 transition-colors duration-200">
+                — Did I do
+              </span>
+            </div>
           </div>
         </div>
 
