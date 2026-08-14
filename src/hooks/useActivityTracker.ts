@@ -11,6 +11,7 @@ import {
 } from '../types';
 import confetti from 'canvas-confetti';
 import {
+  supabase,
   fetchCloudMetadata,
   saveCloudMetadata,
   createMetadataRecord,
@@ -40,6 +41,7 @@ export function useActivityTracker(didId?: string) {
 
   const isInitialLoad = useRef(true);
   const saveDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastKnownUpdatedRef = useRef<string>(new Date().toISOString());
   const currentDidId = didId || DEFAULT_METADATA_ROW_ID;
 
   const showToast = useCallback((msg: string) => {
@@ -79,12 +81,14 @@ export function useActivityTracker(didId?: string) {
         } else {
           setCategories(DEFAULT_CATEGORIES);
         }
+        lastKnownUpdatedRef.current = cloudPayload.data?.lastUpdated || new Date().toISOString();
         setSyncStatus('synced');
       } else {
         // First run or row empty - initialize user cloud metadata
         setData(EMPTY_METADATA);
         setCategories(DEFAULT_CATEGORIES);
         await saveCloudMetadata(EMPTY_METADATA, DEFAULT_CATEGORIES, currentDidId);
+        lastKnownUpdatedRef.current = new Date().toISOString();
         setSyncStatus('synced');
       }
       isInitialLoad.current = false;
@@ -93,7 +97,56 @@ export function useActivityTracker(didId?: string) {
     loadCloudData();
   }, [currentDidId, didId]);
 
-  // 2. Cloud Sync: Automatically save data & categories to Supabase on state change for this user's didId
+  // 1.5 Realtime Multi-Tab / Multi-Device Synchronization via Supabase Realtime Channel
+  useEffect(() => {
+    if (!isSupabaseConfigured || !didId || !supabase) return;
+
+    // Listen to live database changes on this user's metadata row
+    const channel = supabase
+      .channel(`realtime_did_${didId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'metadata',
+          filter: `id=eq.${didId}`,
+        },
+        (payload: any) => {
+          const newRecord = payload.new;
+          if (newRecord && newRecord.data && newRecord.data.data) {
+            const remotePayload = newRecord.data;
+            const remoteUpdated = newRecord.updated_at || remotePayload.data?.lastUpdated;
+
+            // Only update local state if remote update is from another tab/device
+            if (remoteUpdated && remoteUpdated !== lastKnownUpdatedRef.current) {
+              console.log('[Supabase Realtime] Received live update from another tab/device:', remoteUpdated);
+              isInitialLoad.current = true;
+              lastKnownUpdatedRef.current = remoteUpdated;
+
+              if (remotePayload.data && Array.isArray(remotePayload.data.items)) {
+                setData(remotePayload.data);
+              }
+              if (remotePayload.categories && Array.isArray(remotePayload.categories)) {
+                setCategories(remotePayload.categories);
+              }
+              setSyncStatus('synced');
+
+              setTimeout(() => {
+                isInitialLoad.current = false;
+              }, 200);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [didId]);
+
+  // 2. Cloud Sync: Automatically save data & categories to Supabase with OCC conflict prevention
   useEffect(() => {
     // Skip saving during initial fetch load or if no active didId
     if (isInitialLoad.current || !isSupabaseConfigured || !didId) return;
@@ -105,8 +158,26 @@ export function useActivityTracker(didId?: string) {
     setSyncStatus('saving');
 
     saveDebounceTimer.current = setTimeout(async () => {
-      const success = await saveCloudMetadata(data, categories, currentDidId);
-      if (success) {
+      const nowIso = new Date().toISOString();
+      const saveRes = await saveCloudMetadata(
+        data, 
+        categories, 
+        currentDidId, 
+        lastKnownUpdatedRef.current
+      );
+
+      if (saveRes.success) {
+        lastKnownUpdatedRef.current = nowIso;
+        
+        // If a collision was resolved by merging, update the React state with the merged result
+        if (saveRes.mergedPayload) {
+          isInitialLoad.current = true;
+          if (saveRes.mergedPayload.data) setData(saveRes.mergedPayload.data);
+          if (saveRes.mergedPayload.categories) setCategories(saveRes.mergedPayload.categories);
+          showToast('⚡ Live sync merged changes from another device/tab!');
+          setTimeout(() => { isInitialLoad.current = false; }, 200);
+        }
+        
         setSyncStatus('synced');
       } else {
         setSyncStatus('error');
@@ -533,15 +604,16 @@ export function useActivityTracker(didId?: string) {
         return false;
       }
       setSyncStatus('saving');
-      const success = await saveCloudMetadata(data, categories, rowId);
-      if (success) {
+      const res = await saveCloudMetadata(data, categories, rowId, lastKnownUpdatedRef.current);
+      if (res.success) {
         setSyncStatus('synced');
         showToast(`☁️ Saved & upserted metadata ("${rowId}") to Supabase!`);
+        return true;
       } else {
         setSyncStatus('error');
         showToast('⚠️ Failed to save metadata to Supabase DB.');
+        return false;
       }
-      return success;
     },
     [data, categories, showToast]
   );

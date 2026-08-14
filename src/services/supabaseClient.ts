@@ -568,37 +568,126 @@ export async function updateMetadataRecord(
 }
 
 /**
- * Save / Upsert JSON metadata state directly to Supabase cloud database.
- * If the record exists it updates it; if not, it inserts it.
+ * Merge two CloudPayloads non-destructively:
+ * - Items from both sides are preserved by unique item.id
+ * - If an item exists in both, the one with the latest timestamp/progress wins
+ * - Categories are unioned by id
+ */
+export function mergeCloudPayloads(localPayload: CloudPayload, remotePayload: CloudPayload): CloudPayload {
+  const itemMap = new Map<string, TaskItem>();
+
+  // 1. Load remote items first
+  if (remotePayload?.data?.items && Array.isArray(remotePayload.data.items)) {
+    remotePayload.data.items.forEach((item) => {
+      itemMap.set(item.id, item);
+    });
+  }
+
+  // 2. Overlay local items: if collision, newer updatedAt/progress takes precedence
+  if (localPayload?.data?.items && Array.isArray(localPayload.data.items)) {
+    localPayload.data.items.forEach((localItem) => {
+      const existing = itemMap.get(localItem.id);
+      if (!existing) {
+        itemMap.set(localItem.id, localItem);
+      } else {
+        // Compare completion / creation timestamps or progress
+        const localTime = new Date(localItem.completedAt || localItem.startedAt || localItem.createdAt || 0).getTime();
+        const remoteTime = new Date(existing.completedAt || existing.startedAt || existing.createdAt || 0).getTime();
+
+        if (localTime >= remoteTime) {
+          itemMap.set(localItem.id, { ...existing, ...localItem });
+        }
+      }
+    });
+  }
+
+  // Union categories
+  const catMap = new Map<string, CategoryInfo>();
+  if (remotePayload?.categories && Array.isArray(remotePayload.categories)) {
+    remotePayload.categories.forEach((c) => catMap.set(c.id, c));
+  }
+  if (localPayload?.categories && Array.isArray(localPayload.categories)) {
+    localPayload.categories.forEach((c) => catMap.set(c.id, c));
+  }
+
+  return {
+    data: {
+      version: localPayload.data?.version || '1.0.0',
+      lastUpdated: new Date().toISOString(),
+      items: Array.from(itemMap.values()),
+    },
+    categories: Array.from(catMap.values()),
+  };
+}
+
+/**
+ * Save / Upsert JSON metadata state directly to Supabase cloud database with
+ * Optimistic Concurrency Control (OCC). If remote record has changed concurrently,
+ * performs an intelligent non-destructive item merge before writing.
  */
 export async function saveCloudMetadata(
   activityData: ActivityMetaData,
   categories: CategoryInfo[],
-  rowId: string = DEFAULT_METADATA_ROW_ID
-): Promise<boolean> {
-  if (!supabase) return false;
+  rowId: string = DEFAULT_METADATA_ROW_ID,
+  knownLastUpdated?: string
+): Promise<{ success: boolean; mergedPayload?: CloudPayload }> {
+  if (!supabase) return { success: false };
 
   try {
-    const payload: CloudPayload = {
+    const localPayload: CloudPayload = {
       data: activityData,
       categories,
     };
 
+    // If knownLastUpdated is provided, check for remote concurrent update
+    if (knownLastUpdated && rowId !== DEFAULT_METADATA_ROW_ID) {
+      const { data: remoteRecord } = await supabase
+        .from('metadata')
+        .select('data, updated_at')
+        .eq('id', rowId)
+        .maybeSingle();
+
+      if (remoteRecord && remoteRecord.updated_at && remoteRecord.data) {
+        const remoteTime = new Date(remoteRecord.updated_at).getTime();
+        const knownTime = new Date(knownLastUpdated).getTime();
+
+        // If remote was updated after our last known timestamp (concurrent write happened in another tab/device)
+        if (remoteTime > knownTime) {
+          console.warn(`[DID Sync] Concurrent modification detected on ${rowId}. Performing non-destructive merge.`);
+          const merged = mergeCloudPayloads(localPayload, remoteRecord.data as CloudPayload);
+
+          const { error: upsertErr } = await supabase.from('metadata').upsert({
+            id: rowId,
+            data: merged,
+            updated_at: new Date().toISOString(),
+          });
+
+          if (upsertErr) {
+            console.error('Supabase merged upsert error:', upsertErr.message);
+            return { success: false };
+          }
+
+          return { success: true, mergedPayload: merged };
+        }
+      }
+    }
+
+    // Standard non-conflicting upsert
     const { error } = await supabase.from('metadata').upsert({
       id: rowId,
-      data: payload,
+      data: localPayload,
       updated_at: new Date().toISOString(),
     });
 
     if (error) {
       console.error('Supabase upsert error:', error.message);
-      return false;
+      return { success: false };
     }
 
-    return true;
+    return { success: true };
   } catch (err) {
     console.error('Failed to save metadata to Supabase cloud:', err);
-    return false;
+    return { success: false };
   }
 }
 

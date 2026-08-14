@@ -25,8 +25,9 @@
   - 🔥 **3-Day Consecutive Streak**: Calculates consecutive daily completion logs and awards a glowing streak badge for users active 3+ days in a row.
 - **Always-Shrunk Completed Cards**: Completed task cards on boards stay in their compact, streamlined format.
 
-### 4. ☁️ Supabase Cloud DB & Full Metadata CRUD
-- **Cross-Device Persistence**: Backed by Supabase PostgreSQL for automatic cloud sync without local storage constraints.
+### 4. ☁️ Supabase Cloud DB, Realtime Sync & OCC Locking
+- **Instant Cross-Device Sync**: Uses Supabase Realtime Channels (`supabase.channel`) to live-broadcast task and board changes across tabs and devices without page reloads.
+- **Optimistic Concurrency Control (OCC)**: Tracks `lastKnownUpdated` timestamps and applies an intelligent non-destructive item merge (`mergeCloudPayloads`) when concurrent edits occur, preventing overwriting unsynced changes.
 - **JSON Metadata Engine**: In-browser inspector, full export/import, snapshot management, and raw JSON editor.
 
 ---
