@@ -22,13 +22,17 @@ import {
   deleteAllMetadataRecords,
   isSupabaseConfigured,
   DEFAULT_METADATA_ROW_ID,
+  fetchUserCompletionLogs,
+  logCompletedCard,
 } from '../services/supabaseClient';
+import { CompletionLogEntry } from '../types';
 
 export type SyncStatus = 'loading' | 'synced' | 'saving' | 'error' | 'disconnected';
 
-export function useActivityTracker() {
+export function useActivityTracker(didId?: string) {
   const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORIES);
   const [data, setData] = useState<ActivityMetaData>(EMPTY_METADATA);
+  const [fifoCompletedQueue, setFifoCompletedQueue] = useState<CompletionLogEntry[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(
     isSupabaseConfigured ? 'loading' : 'disconnected'
   );
@@ -36,6 +40,7 @@ export function useActivityTracker() {
 
   const isInitialLoad = useRef(true);
   const saveDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentDidId = didId || DEFAULT_METADATA_ROW_ID;
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -44,39 +49,54 @@ export function useActivityTracker() {
     }, 4000);
   }, []);
 
-  // 1. Initial Load: Fetch JSON metadata state from Supabase Cloud DB
+  // 1. Initial Load: Fetch JSON metadata state from Supabase Cloud DB for this user's didId
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !didId) {
       setSyncStatus('disconnected');
       return;
     }
 
     async function loadCloudData() {
       setSyncStatus('loading');
-      const cloudPayload = await fetchCloudMetadata();
+      isInitialLoad.current = true;
+      const [cloudPayload, completionLogs] = await Promise.all([
+        fetchCloudMetadata(currentDidId),
+        fetchUserCompletionLogs(didId),
+      ]);
+
+      if (completionLogs && Array.isArray(completionLogs.fifoQueue)) {
+        setFifoCompletedQueue(completionLogs.fifoQueue);
+      }
 
       if (cloudPayload) {
         if (cloudPayload.data && Array.isArray(cloudPayload.data.items)) {
           setData(cloudPayload.data);
+        } else {
+          setData(EMPTY_METADATA);
         }
         if (cloudPayload.categories && Array.isArray(cloudPayload.categories)) {
           setCategories(cloudPayload.categories);
+        } else {
+          setCategories(DEFAULT_CATEGORIES);
         }
         setSyncStatus('synced');
       } else {
-        // First run or table empty - initialize cloud with default metadata
+        // First run or row empty - initialize user cloud metadata
+        setData(EMPTY_METADATA);
+        setCategories(DEFAULT_CATEGORIES);
+        await saveCloudMetadata(EMPTY_METADATA, DEFAULT_CATEGORIES, currentDidId);
         setSyncStatus('synced');
       }
       isInitialLoad.current = false;
     }
 
     loadCloudData();
-  }, []);
+  }, [currentDidId, didId]);
 
-  // 2. Cloud Sync: Automatically save data & categories to Supabase on state change
+  // 2. Cloud Sync: Automatically save data & categories to Supabase on state change for this user's didId
   useEffect(() => {
-    // Skip saving during initial fetch load
-    if (isInitialLoad.current || !isSupabaseConfigured) return;
+    // Skip saving during initial fetch load or if no active didId
+    if (isInitialLoad.current || !isSupabaseConfigured || !didId) return;
 
     if (saveDebounceTimer.current) {
       clearTimeout(saveDebounceTimer.current);
@@ -85,7 +105,7 @@ export function useActivityTracker() {
     setSyncStatus('saving');
 
     saveDebounceTimer.current = setTimeout(async () => {
-      const success = await saveCloudMetadata(data, categories);
+      const success = await saveCloudMetadata(data, categories, currentDidId);
       if (success) {
         setSyncStatus('synced');
       } else {
@@ -97,7 +117,7 @@ export function useActivityTracker() {
     return () => {
       if (saveDebounceTimer.current) clearTimeout(saveDebounceTimer.current);
     };
-  }, [data, categories, showToast]);
+  }, [data, categories, currentDidId, didId, showToast]);
 
   // Force light mode on document
   useEffect(() => {
@@ -184,6 +204,18 @@ export function useActivityTracker() {
           origin: { y: 0.6 },
           colors: ['#22c55e', '#eab308', '#ffffff', '#000000'],
         });
+
+        // Asynchronously record completion log & FIFO queue in user table
+        if (didId) {
+          const completedTask = updatedItems.find((i) => i.id === id);
+          if (completedTask) {
+            logCompletedCard(didId, completedTask).then((res) => {
+              if (res && res.fifoQueue) {
+                setFifoCompletedQueue(res.fifoQueue);
+              }
+            });
+          }
+        }
       }
 
       return {
@@ -192,7 +224,7 @@ export function useActivityTracker() {
         items: updatedItems,
       };
     });
-  }, []);
+  }, [didId]);
 
   // Move item between columns with min 3 / max 5 validation rules!
   const moveItem = useCallback(
@@ -236,6 +268,21 @@ export function useActivityTracker() {
           origin: { y: 0.6 },
           colors: ['#22c55e', '#eab308', '#ffffff'],
         });
+
+        // Asynchronously record completion log & FIFO queue in user table
+        if (didId) {
+          const completedTask: TaskItem = {
+            ...item,
+            column: 'completed',
+            progress: 100,
+            completedAt,
+          };
+          logCompletedCard(didId, completedTask).then((res) => {
+            if (res && res.fifoQueue) {
+              setFifoCompletedQueue(res.fifoQueue);
+            }
+          });
+        }
       } else if (targetColumn === 'backlog' && item.progress === 100) {
         newProgress = 0;
         if (item.totalUnits) item.currentUnit = 0;
@@ -259,7 +306,7 @@ export function useActivityTracker() {
 
       return true;
     },
-    [data.items, getInProgressCount, showToast]
+    [data.items, didId, getInProgressCount, showToast]
   );
 
   // Delete Item
@@ -537,6 +584,7 @@ export function useActivityTracker() {
   return {
     data,
     categories,
+    fifoCompletedQueue,
     syncStatus,
     addCategory,
     toastMessage,

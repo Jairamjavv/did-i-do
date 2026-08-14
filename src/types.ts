@@ -34,6 +34,41 @@ export interface CategoryInfo {
   unitDefault: string;
 }
 
+export interface DIDUser {
+  did_id: string;          // e.g. "did_abc123"
+  identifier: string;      // email or phone
+  passcode: string;        // 6-8 digit numerical passcode
+  displayName: string;     // user nickname/name
+  createdAt: string;
+}
+
+export interface AuthRegistryPayload {
+  users: DIDUser[];
+}
+
+export interface CompletionLogEntry {
+  id: string;
+  itemId: string;
+  did_id: string;
+  title: string;
+  category: ActivityCategory;
+  creatorOrMeta?: string;
+  rating?: number;
+  completedAt: string;
+  createdAt: string;
+  durationDays: number;
+  durationText: string;
+  streakDays: number;
+  has3DayStreak: boolean;
+}
+
+export interface UserCompletionLogPayload {
+  did_id: string;
+  fifoQueue: CompletionLogEntry[];  // max 6 items strictly FIFO
+  history: CompletionLogEntry[];    // full audit log of all completed cards
+  lastUpdated: string;
+}
+
 export interface CloudPayload {
   data: ActivityMetaData;
   categories: CategoryInfo[];

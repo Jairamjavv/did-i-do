@@ -9,12 +9,41 @@ import { SummaryDashboard } from './components/SummaryDashboard';
 import { AddItemModal } from './components/AddItemModal';
 import { AddCategoryModal } from './components/AddCategoryModal';
 import { JsonModal } from './components/JsonModal';
+import { LandingPage } from './components/LandingPage';
 import { AlertTriangle } from 'lucide-react';
 
+interface AuthUser {
+  did_id: string;
+  identifier: string;
+  displayName: string;
+}
+
 export default function App() {
+  // Simple session state (stored in localStorage)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('did_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleLoginSuccess = (user: AuthUser) => {
+    setCurrentUser(user);
+    localStorage.setItem('did_current_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('did_current_user');
+  };
+
+  // Activity Tracker scoped by the authenticated user's unique did_id
   const {
     data,
     categories,
+    fifoCompletedQueue,
     syncStatus,
     addCategory,
     toastMessage,
@@ -32,7 +61,7 @@ export default function App() {
     saveToCloud,
     deleteFromCloud,
     isSupabaseConfigured,
-  } = useActivityTracker();
+  } = useActivityTracker(currentUser?.did_id);
 
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'dashboard'>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,6 +183,15 @@ export default function App() {
     }
   };
 
+  // If not logged in, render the Welcome Landing Page first
+  if (!currentUser) {
+    return (
+      <LandingPage
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col font-minion antialiased bg-architectural-grid bg-zinc-50 text-black transition-colors duration-200">
       
@@ -171,6 +209,8 @@ export default function App() {
         liveStatusCountdown={liveStatusCountdown}
         syncStatus={syncStatus}
         onLogoClick={() => setSelectedCategory('dashboard')}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* TOAST NOTIFICATION POPUP */}
@@ -251,6 +291,8 @@ export default function App() {
               categories={categories}
               onSelectCategory={(cat) => setSelectedCategory(cat)}
               onOpenAddItem={handleOpenAddItem}
+              userName={currentUser?.displayName}
+              fifoQueue={fifoCompletedQueue}
             />
           ) : (
             <ActivityBoard

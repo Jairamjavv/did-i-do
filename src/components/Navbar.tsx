@@ -15,6 +15,8 @@ interface NavbarProps {
   liveStatusCountdown: number | null;
   syncStatus?: SyncStatus;
   onLogoClick?: () => void;
+  currentUser?: { identifier: string; displayName?: string } | null;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +32,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   liveStatusCountdown,
   syncStatus = 'disconnected',
   onLogoClick,
+  currentUser,
+  onLogout,
 }) => {
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
@@ -203,6 +207,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <RefreshCw className="w-4 h-4" />
             </button>
+          )}
+
+          {/* USER INFO & LOGOUT */}
+          {currentUser && onLogout && (
+            <div className="flex items-center gap-1.5 pl-1.5 border-l-2 border-black/20">
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 border-2 border-black font-mono text-[10px] font-bold uppercase truncate max-w-[150px] bg-yellow-300 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                title={`${currentUser.displayName || currentUser.identifier} (${currentUser.identifier})`}
+              >
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                <span className="truncate">
+                  {currentUser.displayName || currentUser.identifier}
+                </span>
+              </div>
+              <button
+                onClick={onLogout}
+                className="px-2 py-1.5 border-2 border-black bg-zinc-100 hover:bg-black hover:text-white text-xs font-mono font-bold uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5"
+                title="Sign Out / Return to Landing Page"
+              >
+                Exit
+              </button>
+            </div>
           )}
 
         </div>
