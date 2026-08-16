@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityCategory, CategoryInfo, ColumnType, TaskItem, DEFAULT_CATEGORIES } from '../types';
-import { X, Plus, Save, AlertCircle, Sparkles, Search, Loader2, Check, BookOpen, Film, Tv, Gamepad2 } from 'lucide-react';
+import { ActivityCategory, CategoryInfo, ColumnType, TaskItem, SeasonDetail, DEFAULT_CATEGORIES } from '../types';
+import { X, Plus, Save, AlertCircle, Sparkles, Search, Loader2, Check, Tv, Layers, Film, BookOpen, Gamepad2 } from 'lucide-react';
 import { searchMetadata, MetadataSuggestion } from '../services/metadataApi';
 
 interface AddItemModalProps {
@@ -36,6 +36,13 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [notes, setNotes] = useState('');
 
+  // Series specific state
+  const [totalSeasons, setTotalSeasons] = useState<number | undefined>(undefined);
+  const [seasons, setSeasons] = useState<SeasonDetail[]>([]);
+  const [currentSeason, setCurrentSeason] = useState<number>(1);
+  const [currentEpisode, setCurrentEpisode] = useState<number>(0);
+  const [bulkEpisodeCount, setBulkEpisodeCount] = useState<string>('');
+
   // Auto-fill API states
   const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -53,10 +60,31 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       setProgress(editingItem.progress || 0);
       setCurrentUnit(editingItem.currentUnit);
       setTotalUnits(editingItem.totalUnits);
-      setUnitName(editingItem.unitName || 'pages');
+      setUnitName(editingItem.unitName || (editingItem.category === 'series' ? 'episodes' : 'pages'));
       setPriority(editingItem.priority || 'medium');
       setRating(editingItem.rating);
       setNotes(editingItem.notes || '');
+
+      if (editingItem.category === 'series' || (editingItem.seasons && editingItem.seasons.length > 0)) {
+        const seasonList = editingItem.seasons && editingItem.seasons.length > 0
+          ? editingItem.seasons
+          : editingItem.totalSeasons && editingItem.totalSeasons > 0
+          ? Array.from({ length: editingItem.totalSeasons }, (_, i) => ({
+              seasonNumber: i + 1,
+              totalEpisodes: editingItem.totalUnits ? Math.ceil(editingItem.totalUnits / editingItem.totalSeasons!) : 10,
+              episodesCompleted: 0,
+            }))
+          : [];
+        setTotalSeasons(editingItem.totalSeasons || (seasonList.length > 0 ? seasonList.length : undefined));
+        setSeasons(seasonList);
+        setCurrentSeason(editingItem.currentSeason || 1);
+        setCurrentEpisode(editingItem.currentEpisode || 0);
+      } else {
+        setTotalSeasons(undefined);
+        setSeasons([]);
+        setCurrentSeason(1);
+        setCurrentEpisode(0);
+      }
     } else {
       setCategory(initialCategory);
       setColumn(initialColumn);
@@ -66,15 +94,66 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       setCurrentUnit(undefined);
       setTotalUnits(undefined);
       const catObj = categories.find((c) => c.id === initialCategory);
-      setUnitName(catObj ? catObj.unitDefault : 'pages');
+      setUnitName(catObj ? catObj.unitDefault : initialCategory === 'series' ? 'episodes' : 'pages');
       setPriority('medium');
       setRating(undefined);
       setNotes('');
+      setTotalSeasons(undefined);
+      setSeasons([]);
+      setCurrentSeason(1);
+      setCurrentEpisode(0);
+      setBulkEpisodeCount('');
     }
     setSuggestions([]);
     setShowSuggestions(false);
     setAutofillSuccess(null);
   }, [editingItem, initialCategory, initialColumn, isOpen, categories]);
+
+  // Handle total seasons count change
+  const handleTotalSeasonsChange = (valStr: string) => {
+    if (!valStr) {
+      setTotalSeasons(undefined);
+      setSeasons([]);
+      setTotalUnits(undefined);
+      return;
+    }
+    const count = Math.min(50, Math.max(1, parseInt(valStr, 10) || 1));
+    setTotalSeasons(count);
+
+    const updatedSeasons: SeasonDetail[] = Array.from({ length: count }, (_, i) => {
+      const seasonNum = i + 1;
+      const existing = seasons.find((s) => s.seasonNumber === seasonNum);
+      return {
+        seasonNumber: seasonNum,
+        totalEpisodes: existing ? existing.totalEpisodes : 10,
+        episodesCompleted: existing ? existing.episodesCompleted || 0 : 0,
+      };
+    });
+
+    setSeasons(updatedSeasons);
+    const sum = updatedSeasons.reduce((acc, s) => acc + (s.totalEpisodes || 0), 0);
+    setTotalUnits(sum);
+    setUnitName('episodes');
+  };
+
+  // Handle individual season episodes change
+  const handleSeasonEpisodesChange = (seasonNum: number, epsVal: number) => {
+    const updated = seasons.map((s) =>
+      s.seasonNumber === seasonNum ? { ...s, totalEpisodes: Math.max(0, epsVal || 0) } : s
+    );
+    setSeasons(updated);
+    const sum = updated.reduce((acc, s) => acc + (s.totalEpisodes || 0), 0);
+    setTotalUnits(sum);
+  };
+
+  // Bulk set all seasons to the same episode count
+  const handleApplyBulkEpisodes = () => {
+    const count = parseInt(bulkEpisodeCount, 10);
+    if (!count || count <= 0) return;
+    const updated = seasons.map((s) => ({ ...s, totalEpisodes: count }));
+    setSeasons(updated);
+    setTotalUnits(count * seasons.length);
+  };
 
   // When category changes, update unitName default and clear suggestions
   const handleCategoryChange = (cat: ActivityCategory) => {
@@ -82,6 +161,16 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     const catObj = categories.find((c) => c.id === cat);
     if (catObj) {
       setUnitName(catObj.unitDefault);
+    }
+    if (cat === 'series') {
+      setUnitName('episodes');
+      if (!totalSeasons || seasons.length === 0) {
+        // Default to 1 season with 10 episodes if none set yet
+        setTotalSeasons(1);
+        const initSeasons: SeasonDetail[] = [{ seasonNumber: 1, totalEpisodes: 10, episodesCompleted: 0 }];
+        setSeasons(initSeasons);
+        setTotalUnits(10);
+      }
     }
     setSuggestions([]);
     setShowSuggestions(false);
@@ -143,8 +232,33 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     if (!title.trim()) return;
 
     let finalProgress = progress;
-    if (column === 'completed') finalProgress = 100;
-    if (column === 'backlog' && !editingItem) finalProgress = 0;
+    let finalCurrentUnit = currentUnit;
+    let finalTotalUnits = totalUnits;
+    let finalSeasons = seasons.length > 0 ? seasons : undefined;
+
+    if (category === 'series' && seasons.length > 0) {
+      const sumEps = seasons.reduce((acc, s) => acc + (s.totalEpisodes || 0), 0);
+      const compEps = seasons.reduce((acc, s) => acc + (s.episodesCompleted || 0), 0);
+      finalTotalUnits = sumEps;
+      
+      if (column === 'completed') {
+        finalProgress = 100;
+        finalCurrentUnit = sumEps;
+        finalSeasons = seasons.map((s) => ({ ...s, episodesCompleted: s.totalEpisodes }));
+      } else if (column === 'backlog' && !editingItem) {
+        finalProgress = 0;
+        finalCurrentUnit = 0;
+        finalSeasons = seasons.map((s) => ({ ...s, episodesCompleted: 0 }));
+      } else {
+        finalCurrentUnit = compEps;
+        if (sumEps > 0) {
+          finalProgress = Math.min(100, Math.max(0, Math.round((compEps / sumEps) * 100)));
+        }
+      }
+    } else {
+      if (column === 'completed') finalProgress = 100;
+      if (column === 'backlog' && !editingItem) finalProgress = 0;
+    }
 
     onSave({
       id: editingItem ? editingItem.id : undefined,
@@ -153,12 +267,16 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       creatorOrMeta: creatorOrMeta.trim(),
       column,
       progress: finalProgress,
-      currentUnit,
-      totalUnits,
-      unitName,
+      currentUnit: finalCurrentUnit,
+      totalUnits: finalTotalUnits,
+      unitName: category === 'series' ? 'episodes' : unitName,
       priority,
       rating,
       notes: notes.trim(),
+      totalSeasons: category === 'series' ? (totalSeasons || seasons.length) : undefined,
+      seasons: category === 'series' ? finalSeasons : undefined,
+      currentSeason: category === 'series' ? currentSeason : undefined,
+      currentEpisode: category === 'series' ? currentEpisode : undefined,
     });
 
     onClose();
@@ -367,35 +485,146 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             )}
           </div>
 
-          {/* UNITS & PROGRESS % */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
-                Total Units ({unitName})
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={totalUnits || ''}
-                onChange={(e) => setTotalUnits(e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="e.g. 400 pages / 10 eps"
-                className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm"
-              />
-            </div>
+          {/* SERIES SPECIFIC SEASONS & EPISODES BREAKDOWN OR GENERIC UNITS */}
+          {category === 'series' ? (
+            <div className="p-4 rounded-xl border-2 border-black dark:border-white bg-yellow-50/50 dark:bg-yellow-950/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-titan text-xs uppercase tracking-wide text-black dark:text-white">
+                  <Tv className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                  <span>Series Season & Episode Breakdown</span>
+                </div>
+                {totalUnits !== undefined && totalUnits > 0 && (
+                  <span className="font-mono-clean font-bold text-[11px] px-2 py-0.5 rounded-full border border-black dark:border-white bg-yellow-400 text-black">
+                    {totalUnits} Total Episodes
+                  </span>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
-                Unit Name
-              </label>
-              <input
-                type="text"
-                value={unitName}
-                onChange={(e) => setUnitName(e.target.value)}
-                placeholder="pages, episodes, hours, mins"
-                className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm"
-              />
+              {/* STEP 1: SELECT TOTAL SEASONS */}
+              <div>
+                <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
+                  1. Total Seasons *
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={totalSeasons || ''}
+                    onChange={(e) => handleTotalSeasonsChange(e.target.value)}
+                    placeholder="Enter total seasons (e.g. 3, 5, 8)..."
+                    className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-white dark:bg-zinc-900 font-mono-clean text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                  />
+                  {/* QUICK SEASON COUNTERS */}
+                  <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+                    {[1, 2, 3, 4, 5].map((num) => (
+                      <button
+                        type="button"
+                        key={num}
+                        onClick={() => handleTotalSeasonsChange(String(num))}
+                        className={`px-2.5 py-1.5 rounded-lg border border-black dark:border-white font-mono-clean text-xs font-bold transition-colors ${
+                          totalSeasons === num
+                            ? 'bg-black text-white dark:bg-white dark:text-black'
+                            : 'bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        {num} S
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 2: EXPANDED EPISODE INPUTS PER SEASON */}
+              {totalSeasons !== undefined && totalSeasons > 0 && (
+                <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-2.5 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <label className="block text-xs font-mono-clean font-bold uppercase">
+                      2. Total Episodes for each season:
+                    </label>
+
+                    {/* BULK APPLY HELPER */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="All eps"
+                        value={bulkEpisodeCount}
+                        onChange={(e) => setBulkEpisodeCount(e.target.value)}
+                        className="w-20 px-2 py-1 text-xs rounded-lg border border-black dark:border-white bg-white dark:bg-zinc-900 font-mono-clean"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyBulkEpisodes}
+                        disabled={!bulkEpisodeCount}
+                        className="px-2 py-1 rounded-lg border border-black dark:border-white bg-black text-white dark:bg-white dark:text-black font-mono-clean text-[10px] font-bold uppercase hover:opacity-80 disabled:opacity-40"
+                      >
+                        Set All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1">
+                    {seasons.map((season) => (
+                      <div
+                        key={season.seasonNumber}
+                        className="p-2 rounded-xl border border-black dark:border-white bg-white dark:bg-zinc-900 flex flex-col gap-1 shadow-xs"
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-mono-clean font-bold">
+                          <span className="text-zinc-700 dark:text-zinc-300">
+                            Season {season.seasonNumber}
+                          </span>
+                          <span className="text-[10px] text-zinc-400">eps</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          value={season.totalEpisodes || ''}
+                          onChange={(e) =>
+                            handleSeasonEpisodesChange(
+                              season.seasonNumber,
+                              parseInt(e.target.value, 10) || 0
+                            )
+                          }
+                          placeholder="e.g. 10"
+                          className="w-full px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-mono-clean text-xs font-bold focus:outline-none focus:border-black"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
+                  Total Units ({unitName})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={totalUnits || ''}
+                  onChange={(e) => setTotalUnits(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="e.g. 400 pages / 120 mins"
+                  className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono-clean font-bold uppercase mb-1">
+                  Unit Name
+                </label>
+                <input
+                  type="text"
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
+                  placeholder="pages, mins, hours, units"
+                  className="w-full px-3 py-2 rounded-xl border-2 border-black dark:border-white bg-zinc-50 dark:bg-zinc-900 font-mono-clean text-sm"
+                />
+              </div>
+            </div>
+          )}
 
           {column === 'in_progress' && (
             <div>

@@ -241,12 +241,21 @@ export function useActivityTracker(didId?: string) {
       const updatedItems = prev.items.map((item) => {
         if (item.id !== id) return item;
 
+        let newSeasons = updates.seasons !== undefined ? updates.seasons : item.seasons;
+        let currentU = updates.currentUnit !== undefined ? updates.currentUnit : item.currentUnit;
+        let totalU = updates.totalUnits !== undefined ? updates.totalUnits : item.totalUnits;
+
+        // If seasons were updated, compute currentUnit and totalUnits from seasons
+        if (newSeasons && newSeasons.length > 0) {
+          const sumEps = newSeasons.reduce((acc, s) => acc + (s.totalEpisodes || 0), 0);
+          const compEps = newSeasons.reduce((acc, s) => acc + (s.episodesCompleted || 0), 0);
+          totalU = sumEps;
+          currentU = compEps;
+        }
+
         let newProgress = updates.progress !== undefined ? updates.progress : item.progress;
         
-        // Recalculate progress if currentUnit and totalUnits change
-        const currentU = updates.currentUnit !== undefined ? updates.currentUnit : item.currentUnit;
-        const totalU = updates.totalUnits !== undefined ? updates.totalUnits : item.totalUnits;
-
+        // Recalculate progress if currentUnit and totalUnits are known
         if (currentU !== undefined && totalU && totalU > 0) {
           newProgress = Math.min(100, Math.max(0, Math.round((currentU / totalU) * 100)));
         }
@@ -257,11 +266,17 @@ export function useActivityTracker(didId?: string) {
         if (newProgress >= 100 && item.column !== 'completed') {
           newColumn = 'completed';
           isCompletedNow = true;
+          if (newSeasons && newSeasons.length > 0) {
+            newSeasons = newSeasons.map((s) => ({ ...s, episodesCompleted: s.totalEpisodes }));
+          }
         }
 
         return {
           ...item,
           ...updates,
+          seasons: newSeasons,
+          currentUnit: currentU,
+          totalUnits: totalU,
           progress: newProgress,
           column: newColumn,
           completedAt: newColumn === 'completed' && !item.completedAt ? new Date().toISOString() : item.completedAt,
@@ -326,12 +341,21 @@ export function useActivityTracker(didId?: string) {
 
       let newProgress = item.progress;
       let completedAt = item.completedAt;
+      let newCurrentUnit = item.currentUnit;
+      let newSeasons = item.seasons;
+      let newCurrentSeason = item.currentSeason;
+      let newCurrentEpisode = item.currentEpisode;
 
       if (targetColumn === 'completed') {
         newProgress = 100;
         completedAt = new Date().toISOString();
         if (item.totalUnits) {
-          item.currentUnit = item.totalUnits;
+          newCurrentUnit = item.totalUnits;
+        }
+        if (item.seasons && item.seasons.length > 0) {
+          newSeasons = item.seasons.map((s) => ({ ...s, episodesCompleted: s.totalEpisodes }));
+          newCurrentSeason = item.seasons.length;
+          newCurrentEpisode = item.seasons[item.seasons.length - 1].totalEpisodes;
         }
         confetti({
           particleCount: 75,
@@ -347,6 +371,10 @@ export function useActivityTracker(didId?: string) {
             column: 'completed',
             progress: 100,
             completedAt,
+            currentUnit: newCurrentUnit,
+            seasons: newSeasons,
+            currentSeason: newCurrentSeason,
+            currentEpisode: newCurrentEpisode,
           };
           logCompletedCard(didId, completedTask).then((res) => {
             if (res && res.fifoQueue) {
@@ -356,7 +384,12 @@ export function useActivityTracker(didId?: string) {
         }
       } else if (targetColumn === 'backlog' && item.progress === 100) {
         newProgress = 0;
-        if (item.totalUnits) item.currentUnit = 0;
+        if (item.totalUnits) newCurrentUnit = 0;
+        if (item.seasons && item.seasons.length > 0) {
+          newSeasons = item.seasons.map((s) => ({ ...s, episodesCompleted: 0 }));
+          newCurrentSeason = 1;
+          newCurrentEpisode = 0;
+        }
       }
 
       setData((prev) => ({
@@ -369,6 +402,10 @@ export function useActivityTracker(didId?: string) {
                 column: targetColumn,
                 progress: newProgress,
                 completedAt,
+                currentUnit: newCurrentUnit,
+                seasons: newSeasons,
+                currentSeason: newCurrentSeason,
+                currentEpisode: newCurrentEpisode,
                 startedAt: targetColumn === 'in_progress' && !i.startedAt ? new Date().toISOString() : i.startedAt,
               }
             : i

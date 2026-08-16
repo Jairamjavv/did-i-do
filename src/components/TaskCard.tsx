@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TaskItem, ColumnType } from '../types';
+import { TaskItem, ColumnType, SeasonDetail } from '../types';
 import {
   Star,
   GripVertical,
@@ -13,6 +13,7 @@ import {
   Minus,
   Maximize2,
   Minimize2,
+  Tv,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -24,6 +25,7 @@ interface TaskCardProps {
   onEditItem: (item: TaskItem) => void;
   onDeleteItem: (id: string) => void;
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onUpdateItem?: (id: string, updates: Partial<TaskItem>) => void;
   isShrunk?: boolean;
 }
 
@@ -36,22 +38,87 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onEditItem,
   onDeleteItem,
   onDragStart,
+  onUpdateItem,
   isShrunk: propIsShrunk = false,
 }) => {
   const [showNotes, setShowNotes] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isLocallyShrunk, setIsLocallyShrunk] = useState<boolean | null>(null);
 
+  // Series season tracking state
+  const [activeSeasonNum, setActiveSeasonNum] = useState<number>(item.currentSeason || 1);
+
   // Reset local override when the global board view mode changes
   useEffect(() => {
     setIsLocallyShrunk(null);
   }, [propIsShrunk]);
+
+  // Keep active season in sync if item updates from outside
+  useEffect(() => {
+    if (item.currentSeason) {
+      setActiveSeasonNum(item.currentSeason);
+    }
+  }, [item.currentSeason]);
 
   const isShrunk = isLocallyShrunk !== null ? isLocallyShrunk : propIsShrunk;
 
   const isBacklog = item.column === 'backlog';
   const isInProgress = item.column === 'in_progress';
   const isCompleted = item.column === 'completed';
+
+  const isSeries = item.category === 'series' || Boolean(item.seasons && item.seasons.length > 0);
+
+  // Derive resolved season list
+  const seasonList: SeasonDetail[] = (item.seasons && item.seasons.length > 0)
+    ? item.seasons
+    : item.totalSeasons && item.totalSeasons > 0
+    ? Array.from({ length: item.totalSeasons }, (_, i) => ({
+        seasonNumber: i + 1,
+        totalEpisodes: item.totalUnits ? Math.ceil(item.totalUnits / item.totalSeasons!) : 10,
+        episodesCompleted: 0,
+      }))
+    : [{ seasonNumber: 1, totalEpisodes: item.totalUnits || 10, episodesCompleted: item.currentUnit || 0 }];
+
+  // Currently active season detail object
+  const currentSeasonObj = seasonList.find((s) => s.seasonNumber === activeSeasonNum) || seasonList[0];
+
+  // Handler to update completed episodes for a selected season
+  const handleSeasonEpisodeChange = (targetSeasonNum: number, targetEpisodeCount: number) => {
+    const validEps = Math.max(0, targetEpisodeCount);
+    const updatedSeasons: SeasonDetail[] = seasonList.map((s) => {
+      if (s.seasonNumber < targetSeasonNum) {
+        // Earlier seasons are fully completed
+        return { ...s, episodesCompleted: s.totalEpisodes };
+      } else if (s.seasonNumber === targetSeasonNum) {
+        // Current selected season has targetEpisodeCount completed
+        return { ...s, episodesCompleted: Math.min(s.totalEpisodes, validEps) };
+      } else {
+        // Later seasons not started yet
+        return { ...s, episodesCompleted: 0 };
+      }
+    });
+
+    const totalCompleted = updatedSeasons.reduce((acc, s) => acc + (s.episodesCompleted || 0), 0);
+    const totalEps = updatedSeasons.reduce((acc, s) => acc + (s.totalEpisodes || 0), 0);
+    const newProgress = totalEps > 0 ? Math.min(100, Math.max(0, Math.round((totalCompleted / totalEps) * 100))) : 0;
+
+    setActiveSeasonNum(targetSeasonNum);
+
+    if (onUpdateItem) {
+      onUpdateItem(item.id, {
+        seasons: updatedSeasons,
+        totalSeasons: updatedSeasons.length,
+        currentSeason: targetSeasonNum,
+        currentEpisode: Math.min(currentSeasonObj.totalEpisodes, validEps),
+        currentUnit: totalCompleted,
+        totalUnits: totalEps,
+        progress: newProgress,
+      });
+    } else {
+      onUpdateUnit(item.id, totalCompleted);
+      onUpdateProgress(item.id, newProgress);
+    }
+  };
 
   /* ======================================================================== */
   /* SHRUNK / COMPACT CARD RENDER                                             */
@@ -88,6 +155,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 {item.title}
               </h4>
+              {isSeries && (
+                <span className="font-mono-clean font-bold text-[9px] px-1.5 py-0.5 rounded bg-black/15 text-black flex-shrink-0">
+                  S{item.currentSeason || 1} E{item.currentEpisode || 0}
+                </span>
+              )}
             </div>
 
             {/* CONTROLS & PERCENT BADGE */}
@@ -389,43 +461,127 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           />
         </div>
 
-        {/* INTERACTIVE PROGRESS SLIDER FOR IN_PROGRESS ITEMS */}
+        {/* INTERACTIVE CONTROLS FOR IN_PROGRESS ITEMS */}
         {isInProgress && (
-          <div className="pt-1.5 space-y-2">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={item.progress}
-              onChange={(e) => onUpdateProgress(item.id, Number(e.target.value))}
-              className="w-full accent-yellow-500 cursor-pointer h-1.5"
-            />
+          <div className="pt-2 space-y-2.5">
+            {isSeries ? (
+              <div className="p-2.5 rounded-xl border-2 border-black dark:border-white bg-yellow-50/60 dark:bg-yellow-950/30 space-y-2">
+                <div className="flex items-center justify-between gap-1 text-[11px] font-mono-clean font-bold">
+                  <div className="flex items-center gap-1.5 text-zinc-800 dark:text-zinc-200">
+                    <Tv className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                    <span>Season:</span>
+                  </div>
+                  <select
+                    value={activeSeasonNum}
+                    onChange={(e) => setActiveSeasonNum(Number(e.target.value))}
+                    className="px-2 py-1 text-xs font-mono-clean font-bold rounded-lg border border-black dark:border-white bg-white dark:bg-zinc-900 text-black dark:text-white focus:outline-none cursor-pointer"
+                  >
+                    {seasonList.map((s) => (
+                      <option key={s.seasonNumber} value={s.seasonNumber}>
+                        Season {s.seasonNumber} ({s.episodesCompleted || 0}/{s.totalEpisodes} eps)
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {item.totalUnits && item.totalUnits > 0 && (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-800">
-                <span className="text-[10px] font-mono-clean text-zinc-500">
-                  Update {item.unitName || 'unit'}:
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => onUpdateUnit(item.id, Math.max(0, (item.currentUnit || 0) - 10))}
-                    className="p-1 rounded border border-black dark:border-white hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                    title="-10 units"
-                  >
-                    <Minus className="w-2.5 h-2.5" />
-                  </button>
-                  <span className="text-xs font-mono-clean font-bold px-1 min-w-[2.5rem] text-center">
-                    {item.currentUnit || 0}
-                  </span>
-                  <button
-                    onClick={() => onUpdateUnit(item.id, Math.min(item.totalUnits || 100, (item.currentUnit || 0) + 10))}
-                    className="p-1 rounded border border-black dark:border-white hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                    title="+10 units"
-                  >
-                    <Plus className="w-2.5 h-2.5" />
-                  </button>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-black/10 dark:border-white/10">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono-clean font-bold uppercase text-zinc-500">
+                      Season {activeSeasonNum} Episode:
+                    </span>
+                    <p className="font-titan text-xs text-black dark:text-white truncate">
+                      {currentSeasonObj.episodesCompleted || 0} of {currentSeasonObj.totalEpisodes} done
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSeasonEpisodeChange(
+                          activeSeasonNum,
+                          (currentSeasonObj.episodesCompleted || 0) - 1
+                        )
+                      }
+                      disabled={(currentSeasonObj.episodesCompleted || 0) <= 0}
+                      className="p-1.5 rounded-lg border border-black dark:border-white bg-white dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="-1 Episode"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+
+                    <select
+                      value={currentSeasonObj.episodesCompleted || 0}
+                      onChange={(e) =>
+                        handleSeasonEpisodeChange(activeSeasonNum, Number(e.target.value))
+                      }
+                      className="px-2 py-1 text-xs font-mono-clean font-bold rounded-lg border border-black dark:border-white bg-white dark:bg-zinc-800 text-center cursor-pointer"
+                    >
+                      <option value={0}>0 (Start)</option>
+                      {Array.from({ length: currentSeasonObj.totalEpisodes }, (_, i) => i + 1).map(
+                        (ep) => (
+                          <option key={ep} value={ep}>
+                            Ep {ep} {ep === currentSeasonObj.totalEpisodes ? '🏁' : ''}
+                          </option>
+                        )
+                      )}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSeasonEpisodeChange(
+                          activeSeasonNum,
+                          (currentSeasonObj.episodesCompleted || 0) + 1
+                        )
+                      }
+                      disabled={(currentSeasonObj.episodesCompleted || 0) >= currentSeasonObj.totalEpisodes}
+                      className="p-1.5 rounded-lg border border-black dark:border-white bg-white dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="+1 Episode"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={item.progress}
+                  onChange={(e) => onUpdateProgress(item.id, Number(e.target.value))}
+                  className="w-full accent-yellow-500 cursor-pointer h-1.5"
+                />
+
+                {item.totalUnits && item.totalUnits > 0 && (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-800">
+                    <span className="text-[10px] font-mono-clean text-zinc-500">
+                      Update {item.unitName || 'unit'}:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => onUpdateUnit(item.id, Math.max(0, (item.currentUnit || 0) - 10))}
+                        className="p-1 rounded border border-black dark:border-white hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                        title="-10 units"
+                      >
+                        <Minus className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-xs font-mono-clean font-bold px-1 min-w-[2.5rem] text-center">
+                        {item.currentUnit || 0}
+                      </span>
+                      <button
+                        onClick={() => onUpdateUnit(item.id, Math.min(item.totalUnits || 100, (item.currentUnit || 0) + 10))}
+                        className="p-1 rounded border border-black dark:border-white hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                        title="+10 units"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -182,8 +182,14 @@ export const LiveStatus: React.FC<LiveStatusProps> = ({
                           <p className="font-impact text-xs leading-snug truncate">
                             {item.title}
                           </p>
-                          <p className="text-[9px] font-mono text-zinc-500 uppercase">
-                            {item.category} • {item.creatorOrMeta || 'Media'}
+                          <p className="text-[9px] font-mono text-zinc-500 uppercase flex items-center gap-1">
+                            <span>{item.category}</span>
+                            {(item.category === 'series' || item.currentSeason) && (
+                              <span className="font-bold text-black bg-yellow-300 px-1 py-0.2 rounded border border-black/30">
+                                S{item.currentSeason || 1} E{item.currentEpisode || 0}
+                              </span>
+                            )}
+                            <span>• {item.creatorOrMeta || 'Media'}</span>
                           </p>
                         </div>
                         <span className="font-mono text-xs px-1 py-0.5 border border-black bg-yellow-400 text-black font-black">

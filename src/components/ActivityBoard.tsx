@@ -13,6 +13,7 @@ interface ActivityBoardProps {
   onOpenAddItem: (column?: ColumnType) => void;
   onEditItem: (item: TaskItem) => void;
   onDeleteItem: (id: string) => void;
+  onUpdateItem?: (id: string, updates: Partial<TaskItem>) => void;
   searchQuery: string;
   categories?: CategoryInfo[];
 }
@@ -27,6 +28,7 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
   onOpenAddItem,
   onEditItem,
   onDeleteItem,
+  onUpdateItem,
   searchQuery,
   categories = DEFAULT_CATEGORIES,
 }) => {
@@ -255,6 +257,7 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
                   onEditItem={onEditItem}
                   onDeleteItem={onDeleteItem}
                   onDragStart={handleDragStart}
+                  onUpdateItem={onUpdateItem}
                   isShrunk={isShrunkAll}
                 />
               ))
@@ -328,6 +331,7 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
                   onEditItem={onEditItem}
                   onDeleteItem={onDeleteItem}
                   onDragStart={handleDragStart}
+                  onUpdateItem={onUpdateItem}
                   isShrunk={isShrunkAll}
                 />
               ))
@@ -391,6 +395,7 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
                   onEditItem={onEditItem}
                   onDeleteItem={onDeleteItem}
                   onDragStart={handleDragStart}
+                  onUpdateItem={onUpdateItem}
                   isShrunk={true}
                 />
               ))

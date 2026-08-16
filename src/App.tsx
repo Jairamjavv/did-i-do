@@ -306,6 +306,7 @@ export default function App() {
               onOpenAddItem={(col) => handleOpenAddItem(selectedCategory, col)}
               onEditItem={handleEditItem}
               onDeleteItem={deleteItem}
+              onUpdateItem={updateItem}
               searchQuery={searchQuery}
             />
           )}

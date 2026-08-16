@@ -2,6 +2,12 @@ export type ActivityCategory = string;
 
 export type ColumnType = 'backlog' | 'in_progress' | 'completed';
 
+export interface SeasonDetail {
+  seasonNumber: number;
+  totalEpisodes: number;
+  episodesCompleted?: number;
+}
+
 export interface TaskItem {
   id: string;
   category: ActivityCategory;
@@ -18,6 +24,11 @@ export interface TaskItem {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  // Series-specific season & episode tracking
+  totalSeasons?: number;
+  seasons?: SeasonDetail[];
+  currentSeason?: number;
+  currentEpisode?: number;
 }
 
 export interface ActivityMetaData {
