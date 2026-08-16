@@ -296,6 +296,7 @@ export default function App() {
             />
           ) : (
             <ActivityBoard
+              key={selectedCategory}
               category={selectedCategory}
               items={data.items}
               categories={categories}

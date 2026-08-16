@@ -170,7 +170,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
               {/* EXPAND TOGGLE */}
               <button
-                onClick={() => setIsLocallyShrunk(false)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLocallyShrunk(false);
+                }}
                 className="p-1 rounded hover:bg-black/10 text-black transition-colors"
                 title="Expand card details"
               >
@@ -247,7 +251,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
               {/* EXPAND TOGGLE */}
               <button
-                onClick={() => setIsLocallyShrunk(false)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLocallyShrunk(false);
+                }}
                 className="p-1 rounded hover:bg-white/20 text-white transition-colors"
                 title="Expand card details"
               >
@@ -327,7 +335,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
             {/* EXPAND TOGGLE */}
             <button
-              onClick={() => setIsLocallyShrunk(false)}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLocallyShrunk(false);
+              }}
               className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-black dark:hover:text-white transition-colors"
               title="Expand card details"
             >
@@ -421,7 +433,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* SHRINK CARD BUTTON */}
           <button
-            onClick={() => setIsLocallyShrunk(true)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLocallyShrunk(true);
+            }}
             className="p-1 rounded border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
             title="Shrink card"
           >

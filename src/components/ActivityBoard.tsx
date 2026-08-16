@@ -396,7 +396,7 @@ export const ActivityBoard: React.FC<ActivityBoardProps> = ({
                   onDeleteItem={onDeleteItem}
                   onDragStart={handleDragStart}
                   onUpdateItem={onUpdateItem}
-                  isShrunk={true}
+                  isShrunk={isShrunkAll}
                 />
               ))
             )}
