@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { registerDIDUser, verifyDIDLogin } from '../services/supabaseClient';
+import { Footer } from './Footer';
 
 interface LandingPageProps {
   onLoginSuccess: (user: { did_id: string; identifier: string; displayName: string }) => void;
@@ -583,17 +584,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
       </main>
 
-      {/* MINIMAL FOOTER */}
-      <footer className="w-full border-t-2 border-black bg-white py-4 mt-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 font-mono text-xs text-zinc-600">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-black">D.I.D</span> • Did I Do — Activity & Task Velocity
-          </div>
-          <div>
-            Built with React & Supabase • Simple Passcode Auth
-          </div>
-        </div>
-      </footer>
+      {/* CENTER FOOTER WITH HOVER TAMIL TOOLTIP */}
+      <Footer />
 
     </div>
   );

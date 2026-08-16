@@ -10,6 +10,7 @@ import { AddItemModal } from './components/AddItemModal';
 import { AddCategoryModal } from './components/AddCategoryModal';
 import { JsonModal } from './components/JsonModal';
 import { LandingPage } from './components/LandingPage';
+import { Footer } from './components/Footer';
 import { AlertTriangle } from 'lucide-react';
 
 interface AuthUser {
@@ -314,6 +315,9 @@ export default function App() {
         </main>
 
       </div>
+
+      {/* CENTER FOOTER */}
+      <Footer />
 
       {/* MODALS */}
       <AddItemModal
